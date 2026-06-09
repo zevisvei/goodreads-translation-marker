@@ -1,0 +1,15 @@
+# debug / scratch artifacts
+_*.png
+.playwright-mcp/
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# editor
+.vscode/
+*.log
+
+# node (not used, but just in case)
+node_modules/

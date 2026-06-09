@@ -1,0 +1,31 @@
+.gr-lang-badge {
+  display: block;
+  margin: 4px auto 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+  text-align: center;
+  white-space: nowrap;
+}
+.gr-lang-yes { background: #1e7e34; color: #fff; }
+.gr-lang-no { background: #e9ecef; color: #6c757d; }
+.gr-lang-loading { background: #ffc107; color: #333; }
+.gr-lang-err { background: #dc3545; color: #fff; }
+
+.gr-lang-open {
+  display: block;
+  margin: 3px auto 0;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  background: #0b6e99;
+  color: #fff !important;
+  text-decoration: none;
+  width: max-content;
+}
+.gr-lang-open:hover { background: #095a7d; }

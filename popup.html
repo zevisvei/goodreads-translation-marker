@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; width: 290px; margin: 0; padding: 14px; color: #222; }
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    label { display: block; font-size: 13px; margin: 10px 0 4px; font-weight: 600; }
+    select { width: 100%; padding: 5px; font-size: 13px; }
+    .row { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 13px; }
+    .row input { margin: 0; }
+    button { width: 100%; padding: 8px; margin-top: 8px; font-size: 13px; border: 0; border-radius: 6px; cursor: pointer; }
+    #save { background: #1e7e34; color: #fff; }
+    #mark { background: #b02a37; color: #fff; }
+    .note { font-size: 11px; color: #666; margin-top: 4px; line-height: 1.4; }
+    #status { font-size: 12px; color: #1e7e34; min-height: 16px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Goodreads Translation Marker</h1>
+
+  <label for="lang">Language</label>
+  <select id="lang"></select>
+
+  <div class="row">
+    <input type="checkbox" id="hide" />
+    <label for="hide" style="margin:0;font-weight:400">Hide books without this language</label>
+  </div>
+
+  <button id="save">Save &amp; refresh page</button>
+
+  <button id="mark">Mark non-matching as “Not interested”</button>
+  <div class="note">Acts on the books currently loaded on the recommendations page. This changes your Goodreads recommendations and asks for confirmation first.</div>
+
+  <div id="status"></div>
+
+  <script src="languages.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
