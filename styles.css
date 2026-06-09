@@ -14,18 +14,54 @@
 .gr-lang-loading { background: #ffc107; color: #333; }
 .gr-lang-err { background: #dc3545; color: #fff; }
 
-.gr-lang-open {
-  display: block;
-  margin: 3px auto 0;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-  white-space: nowrap;
-  background: #0b6e99;
+/* the "✔ <lang>" marker doubles as the link to the translated edition */
+.gr-lang-badge.gr-lang-link {
   color: #fff !important;
   text-decoration: none;
+  cursor: pointer;
   width: max-content;
 }
-.gr-lang-open:hover { background: #095a7d; }
+.gr-lang-badge.gr-lang-link:hover { background: #155724; }
+
+.gr-lang-tip {
+  position: absolute;
+  z-index: 2147483647;
+  width: 320px;
+  max-width: 90vw;
+  padding: 10px;
+  background: #fff;
+  color: #222;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  font-family: system-ui, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.gr-tip-row { display: flex; gap: 10px; }
+.gr-tip-cover {
+  width: 70px;
+  height: auto;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  object-fit: contain;
+}
+.gr-tip-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; color: #382110; }
+.gr-tip-author { color: #555; margin-bottom: 4px; }
+.gr-tip-rating { color: #b06d00; font-weight: 600; margin-bottom: 6px; }
+.gr-tip-desc {
+  max-height: 9.8em;
+  overflow: hidden;
+  color: #444;
+}
+.gr-tip-desc.gr-tip-expanded { max-height: none; }
+.gr-tip-more {
+  display: inline-block;
+  margin-top: 6px;
+  color: #0b6e99;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gr-tip-more:hover { text-decoration: underline; }

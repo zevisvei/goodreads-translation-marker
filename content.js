@@ -4,7 +4,7 @@
 // non-matching books and bulk-mark them "Not interested".
 
 const WORK_RE = /work\/editions\/(\d+)/;
-const CACHE_PREFIX = "gr_lang_";
+const CACHE_PREFIX = "gr_lang3_"; // v3: coverUrl now read from the .elementList row
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 const MAX_CONCURRENT = 3;
 
@@ -26,9 +26,10 @@ function defaultLang() {
   return { langCode, langName };
 }
 
-const SETTINGS = Object.assign({ hide: false }, defaultLang());
+const SETTINGS = Object.assign({ hide: false, swapCovers: false }, defaultLang());
 
-// bookId -> { card, anchor, badge, openBtn, hasLang, editionUrl }
+// bookId -> { card, anchor, badge, openBtn, hasLang, editionUrl, coverUrl,
+//             title, imgOrig, swapped }
 const results = new Map();
 
 // ---- settings -----------------------------------------------------------
@@ -74,10 +75,18 @@ function cacheGet(bookId) {
     }
   });
 }
-function cacheSet(bookId, has, editionUrl) {
+function cacheSet(bookId, r) {
   try {
     chrome.storage.local.set(
-      { [cacheKey(bookId)]: { has, editionUrl, ts: Date.now() } },
+      {
+        [cacheKey(bookId)]: {
+          has: r.has,
+          editionUrl: r.editionUrl,
+          coverUrl: r.coverUrl || "",
+          title: r.title || "",
+          ts: Date.now(),
+        },
+      },
       () => void chrome.runtime.lastError
     );
   } catch (_) {
@@ -93,13 +102,20 @@ async function fetchText(url) {
   return r.text();
 }
 
-// returns { has, editionUrl } for the selected language
+// Goodreads/Amazon cover URLs carry a size modifier between the last two dots,
+// e.g. "...cover._SY75_.jpg" or "..._SX50_SY75_.jpg". Strip it for full size.
+function biggerCover(url) {
+  if (!url) return url;
+  return url.replace(/\._S[XY]\d+(?:_S[XY]\d+)?_(\.\w+)(?=$|\?)/, "$1");
+}
+
+// returns { has, editionUrl, coverUrl, title } for the selected language
 async function checkBookHasLang(bookId) {
   const bookHtml = await fetchText(
     "https://www.goodreads.com/book/show/" + bookId
   );
   const m = bookHtml.match(WORK_RE);
-  if (!m) return { has: false, editionUrl: null };
+  if (!m) return { has: false, editionUrl: null, coverUrl: "", title: "" };
   const workId = m[1];
   const editionsUrl =
     "https://www.goodreads.com/work/editions/" +
@@ -118,12 +134,20 @@ async function checkBookHasLang(bookId) {
       /edition language:/i.test(r.textContent) &&
       r.textContent.toLowerCase().includes(name)
   );
-  if (!match) return { has: false, editionUrl: editionsUrl };
+  if (!match) return { has: false, editionUrl: editionsUrl, coverUrl: "", title: "" };
   const link = match.querySelector('a.bookTitle, a[href*="/book/show/"]');
   const editionUrl = link
     ? new URL(link.getAttribute("href"), location.origin).href
     : editionsUrl;
-  return { has: true, editionUrl };
+  const title = link ? link.textContent.trim() : "";
+  // the cover <img> sits in the .elementList row, NOT inside .editionData
+  const row = match.closest(".elementList, tr, li") || match.parentElement;
+  const img = (row && row.querySelector("img")) || match.querySelector("img");
+  const rawCover = img && (img.getAttribute("src") || img.getAttribute("data-src"));
+  const coverUrl = rawCover
+    ? biggerCover(new URL(rawCover, location.origin).href)
+    : "";
+  return { has: true, editionUrl, coverUrl, title };
 }
 
 // ---- DOM ----------------------------------------------------------------
@@ -215,11 +239,12 @@ function attachBadge(anchor, badge) {
   return badge.parentElement;
 }
 
-function makeOpenBtn(url) {
+// the language marker IS the link to the translated edition (no separate pill)
+function makeLinkBadge(url) {
   const a = document.createElement("a");
-  a.className = "gr-lang-open";
-  a.href = url; // opens in the same tab (no target=_blank)
-  a.textContent = "↗ " + SETTINGS.langName.split(";")[0].trim();
+  a.className = "gr-lang-badge gr-lang-yes gr-lang-link";
+  a.href = url; // same tab
+  a.textContent = "✔ " + SETTINGS.langName.split(";")[0].trim();
   return a;
 }
 
@@ -272,15 +297,205 @@ function pump() {
   }
 }
 
-function setResult(rec, has, editionUrl) {
-  rec.hasLang = has;
-  applyBadge(rec.badge, has ? "yes" : "no");
-  if (has && editionUrl) {
-    const btn = makeOpenBtn(editionUrl);
-    rec.openBtn = btn;
-    rec.badge.parentElement && rec.badge.parentElement.appendChild(btn);
+function setResult(rec, data) {
+  rec.hasLang = data.has;
+  rec.editionUrl = data.editionUrl;
+  rec.coverUrl = data.coverUrl || "";
+  rec.title = data.title || "";
+  if (data.has && data.editionUrl) {
+    // turn the loading span into the clickable "✔ <lang>" marker
+    const link = makeLinkBadge(data.editionUrl);
+    rec.badge.replaceWith(link);
+    rec.badge = link;
+    attachTooltip(link, rec);
+    prefetchTip(rec); // warm the cache so hover shows instantly
+    applyCoverSwap(rec);
+  } else {
+    applyBadge(rec.badge, "no");
   }
-  if (SETTINGS.hide && !has && rec.card) rec.card.style.display = "none";
+  if (SETTINGS.hide && !data.has && rec.card) rec.card.style.display = "none";
+}
+
+// ---- cover swap ---------------------------------------------------------
+
+function applyCoverSwap(rec) {
+  if (!SETTINGS.swapCovers || !rec.coverUrl) return;
+  const img = rec.anchor.querySelector("img");
+  if (!img) return;
+  if (!rec.imgOrig)
+    rec.imgOrig = {
+      src: img.getAttribute("src"),
+      srcset: img.getAttribute("srcset"),
+    };
+  img.src = rec.coverUrl;
+  img.removeAttribute("srcset");
+  if (rec.title) img.alt = rec.title;
+  rec.swapped = true;
+}
+
+function revertCoverSwap(rec) {
+  if (!rec.swapped) return;
+  const img = rec.anchor.querySelector("img");
+  if (img && rec.imgOrig) {
+    if (rec.imgOrig.src != null) img.src = rec.imgOrig.src;
+    else img.removeAttribute("src");
+    if (rec.imgOrig.srcset != null) img.setAttribute("srcset", rec.imgOrig.srcset);
+    else img.removeAttribute("srcset");
+  }
+  rec.swapped = false;
+}
+
+// ---- hover tooltip (preview of the translated book page) ----------------
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+// editionUrl -> { cover, title, desc, rating, count }
+const tipCache = new Map();
+async function fetchTip(url) {
+  if (tipCache.has(url)) return tipCache.get(url);
+  const html = await fetchText(url);
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const meta = (p) =>
+    doc.querySelector('meta[property="' + p + '"]')?.getAttribute("content") || "";
+  let rating = "", count = "", author = "";
+  doc.querySelectorAll('script[type="application/ld+json"]').forEach((s) => {
+    try {
+      const j = JSON.parse(s.textContent);
+      const ar = j && j.aggregateRating;
+      if (ar) {
+        rating = ar.ratingValue || rating;
+        count = ar.ratingCount || count;
+      }
+      if (j && j.author) {
+        author = Array.isArray(j.author)
+          ? j.author.map((a) => a.name).filter(Boolean).join(", ")
+          : j.author.name || author;
+      }
+    } catch (_) {}
+  });
+  // og:description is truncated to ~50 chars; the full blurb lives here
+  const descEl =
+    doc.querySelector('[data-testid="description"]') ||
+    doc.querySelector(".BookPageMetadataSection__description") ||
+    doc.querySelector(".Formatted") ||
+    doc.querySelector("#description");
+  const desc = (descEl ? descEl.textContent : meta("og:description")).trim();
+  const info = {
+    cover: meta("og:image"),
+    title: meta("og:title"),
+    desc,
+    author,
+    rating,
+    count,
+  };
+  tipCache.set(url, info);
+  return info;
+}
+
+function prefetchTip(rec) {
+  if (rec.editionUrl) fetchTip(rec.editionUrl).catch(() => {});
+}
+
+let tipEl;
+function tooltipEl() {
+  if (tipEl) return tipEl;
+  tipEl = document.createElement("div");
+  tipEl.className = "gr-lang-tip";
+  tipEl.dir = "ltr"; // Goodreads-style LTR layout; text nodes auto-direct
+  tipEl.style.display = "none";
+  // keep the tip visible while the pointer is over it
+  tipEl.addEventListener("mouseenter", () => clearTimeout(tipEl._hideT));
+  tipEl.addEventListener("mouseleave", hideTip);
+  // "...more" expands the full description inline (no navigation)
+  tipEl.addEventListener("click", (e) => {
+    const m = e.target.closest(".gr-tip-more");
+    if (!m) return;
+    e.preventDefault();
+    const desc = tipEl.querySelector(".gr-tip-desc");
+    if (!desc) return;
+    const expanded = desc.classList.toggle("gr-tip-expanded");
+    m.textContent = expanded ? "(less)" : "...more";
+  });
+  document.body.appendChild(tipEl);
+  return tipEl;
+}
+
+function renderTip(d) {
+  const stars = d.rating
+    ? "★ " +
+      d.rating +
+      " avg rating" +
+      (d.count ? " — " + Number(d.count).toLocaleString() + " ratings" : "")
+    : "";
+  // a toggle (not a link) — expands the full blurb inside the tip
+  const more =
+    (d.desc || "").length > 180
+      ? '<span class="gr-tip-more" role="button">...more</span>'
+      : "";
+  return (
+    '<div class="gr-tip-title" dir="auto">' + escapeHtml(d.title || "") + "</div>" +
+    (d.author ? '<div class="gr-tip-author" dir="auto">by ' + escapeHtml(d.author) + "</div>" : "") +
+    (stars ? '<div class="gr-tip-rating">' + escapeHtml(stars) + "</div>" : "") +
+    '<div class="gr-tip-row">' +
+    (d.cover ? '<img class="gr-tip-cover" src="' + escapeHtml(d.cover) + '" alt="">' : "") +
+    '<div class="gr-tip-desc" dir="auto">' + escapeHtml(d.desc || "") + "</div>" +
+    "</div>" +
+    more
+  );
+}
+
+function positionTip(el, target) {
+  const r = target.getBoundingClientRect();
+  el.style.top = window.scrollY + r.bottom + 6 + "px";
+  const w = el.offsetWidth || 320;
+  let left = window.scrollX + r.left;
+  const max = window.scrollX + document.documentElement.clientWidth - w - 8;
+  el.style.left = Math.max(window.scrollX + 8, Math.min(left, max)) + "px";
+}
+
+function showTip(target, rec) {
+  const el = tooltipEl();
+  clearTimeout(el._hideT);
+  el.innerHTML = renderTip({
+    cover: rec.coverUrl,
+    title: rec.title,
+    desc: "…",
+    url: rec.editionUrl,
+  });
+  el.style.display = "block";
+  positionTip(el, target);
+  if (!rec.editionUrl) return;
+  fetchTip(rec.editionUrl)
+    .then((info) => {
+      if (el.style.display === "none") return;
+      el.innerHTML = renderTip({
+        cover: info.cover || rec.coverUrl,
+        title: info.title || rec.title,
+        author: info.author,
+        desc: info.desc || "",
+        rating: info.rating,
+        count: info.count,
+        url: rec.editionUrl,
+      });
+      positionTip(el, target);
+    })
+    .catch(() => {});
+}
+
+function hideTip() {
+  if (!tipEl) return;
+  tipEl._hideT = setTimeout(() => {
+    tipEl.style.display = "none";
+  }, 150);
+}
+
+function attachTooltip(target, rec) {
+  target.addEventListener("mouseenter", () => showTip(target, rec));
+  target.addEventListener("mouseleave", hideTip);
 }
 
 async function process(bookId) {
@@ -290,10 +505,10 @@ async function process(bookId) {
     let cached = await cacheGet(bookId);
     if (cached === undefined) {
       const r = await checkBookHasLang(bookId);
-      cacheSet(bookId, r.has, r.editionUrl);
+      cacheSet(bookId, r);
       cached = r;
     }
-    setResult(rec, cached.has, cached.editionUrl);
+    setResult(rec, cached);
   } catch (e) {
     console.warn("[gr-lang]", bookId, e);
     applyBadge(rec.badge, "err");
@@ -325,8 +540,8 @@ function scan() {
 // re-run from scratch (e.g. language changed) without a page reload
 function reEvaluate() {
   results.forEach((rec) => {
+    revertCoverSwap(rec);
     if (rec.badge) rec.badge.remove();
-    if (rec.openBtn) rec.openBtn.remove();
     if (rec.card) rec.card.style.display = "";
     if (rec.anchor) delete rec.anchor.dataset.grLangDone;
   });
@@ -346,7 +561,8 @@ try {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "sync") return;
   let langChanged = false,
-    hideChanged = false;
+    hideChanged = false,
+    coverChanged = false;
   if (changes.langCode) {
     SETTINGS.langCode = changes.langCode.newValue;
     langChanged = true;
@@ -356,9 +572,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
     SETTINGS.hide = changes.hide.newValue;
     hideChanged = true;
   }
+  if (changes.swapCovers) {
+    SETTINGS.swapCovers = changes.swapCovers.newValue;
+    coverChanged = true;
+  }
   if (!isRecommendationsPage()) return;
   if (langChanged) reEvaluate();
-  else if (hideChanged) reapplyHide();
+  else {
+    if (hideChanged) reapplyHide();
+    if (coverChanged)
+      results.forEach((rec) =>
+        SETTINGS.swapCovers ? applyCoverSwap(rec) : revertCoverSwap(rec)
+      );
+  }
 });
 
 // popup -> content: bulk-mark non-matching books as "Not interested"

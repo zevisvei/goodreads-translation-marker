@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Goodreads Translation Marker",
   "description": "Marks on the Goodreads recommendations page whether each book has an edition in your chosen language; can hide or bulk-skip the rest.",
-  "version": "2.0.0",
+  "version": "2.3.1",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://www.goodreads.com/*"],
   "action": {

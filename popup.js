@@ -1,5 +1,6 @@
 const langSel = document.getElementById("lang");
 const hideChk = document.getElementById("hide");
+const swapChk = document.getElementById("swapCovers");
 const statusEl = document.getElementById("status");
 
 // populate language dropdown
@@ -26,10 +27,11 @@ function defaultLang() {
 
 // load saved settings
 chrome.storage.sync.get(
-  Object.assign({ hide: false }, defaultLang()),
+  Object.assign({ hide: false, swapCovers: false }, defaultLang()),
   (s) => {
     langSel.value = s.langCode;
     hideChk.checked = s.hide;
+    swapChk.checked = s.swapCovers;
   }
 );
 
@@ -48,6 +50,7 @@ document.getElementById("save").addEventListener("click", () => {
     langCode: langSel.value,
     langName: selectedName(),
     hide: hideChk.checked,
+    swapCovers: swapChk.checked,
   };
   // content script applies changes live via chrome.storage.onChanged — no reload
   chrome.storage.sync.set(settings, () => {
