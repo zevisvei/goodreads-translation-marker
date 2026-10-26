@@ -1,18 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "Goodreads Translation Marker",
-  "description": "Marks on the Goodreads recommendations page whether each book has an edition in your chosen language; can hide or bulk-skip the rest.",
-  "version": "2.3.1",
+  "name": "__MSG_extName__",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
+  "version": "2.4.0",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://www.goodreads.com/*"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Goodreads Translation Marker"
+    "default_title": "__MSG_extName__"
   },
   "content_scripts": [
     {
       "matches": ["https://www.goodreads.com/*"],
-      "js": ["content.js"],
+      "js": ["languages.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }

@@ -65,3 +65,20 @@
   white-space: nowrap;
 }
 .gr-tip-more:hover { text-decoration: underline; }
+
+/* narrow table/list cover columns (search, lists, shelves) */
+td > .gr-lang-badge,
+.elementList .gr-lang-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  margin-top: 3px;
+}
+.elementList .gr-lang-badge { display: inline-block; vertical-align: top; }
+
+/* under the title on a book page */
+.gr-lang-badge.gr-lang-main {
+  display: inline-block;
+  margin: 6px 0 10px;
+  font-size: 14px;
+  padding: 3px 12px;
+}

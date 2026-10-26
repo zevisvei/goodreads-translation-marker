@@ -85,3 +85,46 @@ const GR_LANGUAGES = [
   { c: "fry", n: "Western Frisian" },
   { c: "yid", n: "Yiddish" },
 ];
+
+// ---- helpers shared by the popup and the content script -----------------
+
+// browser UI language (e.g. "he", "en-US")
+function grUiLang() {
+  try {
+    return chrome.i18n.getUILanguage();
+  } catch (_) {
+    return navigator.language || "en";
+  }
+}
+
+// primary BCP-47 subtag for a Goodreads code ("fre" -> "fr", "heb" -> "he")
+function grPrimaryTag(code) {
+  try {
+    return Intl.getCanonicalLocales(code)[0].split("-")[0];
+  } catch (_) {
+    return code;
+  }
+}
+
+// language name in the UI language ("heb" -> "עברית" on a Hebrew browser),
+// falling back to the first part of Goodreads' English name
+let grDisplayNames;
+function grLangLabel(code, name) {
+  const fallback = (name || "").split(";")[0].trim() || code;
+  try {
+    grDisplayNames =
+      grDisplayNames || new Intl.DisplayNames([grUiLang()], { type: "language" });
+    const n = grDisplayNames.of(code);
+    if (n && n.toLowerCase() !== code.toLowerCase()) return n;
+  } catch (_) {}
+  return fallback;
+}
+
+// default language from the browser UI language, falling back to English
+function grDefaultLang() {
+  const ui = grPrimaryTag(grUiLang());
+  const found =
+    GR_LANGUAGES.find((l) => grPrimaryTag(l.c) === ui) ||
+    GR_LANGUAGES.find((l) => l.c === "eng");
+  return { langCode: found.c, langName: found.n };
+}
